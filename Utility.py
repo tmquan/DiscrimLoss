@@ -66,6 +66,35 @@ def BNLReLU(x, name=None):
 	return tf.nn.leaky_relu(x, name=name)
 
 ###############################################################################
+def seg_to_aff_op(seg, nhood=tf.constant(malis.mknhood3d(1)), name='SegToAff'):
+	# Squeeze the segmentation to 3D
+	seg = tf.squeeze(seg, axis=-1)
+	# Define the numpy function to transform segmentation to affinity graph
+	np_func = lambda seg, nhood: malis.seg_to_affgraph (seg.astype(np.int32), nhood).astype(np.float32)
+	# Convert the numpy function to tensorflow function
+	tf_func = tf.py_func(np_func, [tf.cast(seg, tf.int32), nhood], [tf.float32], name=name)
+	# Reshape the result, notice that layout format from malis is 3, dimx, dimy, dimx
+	ret = tf.reshape(tf_func[0], [3, seg.shape[0], seg.shape[1], seg.shape[2]])
+	# Transpose the result so that the dimension 3 go to the last channel
+	ret = tf.transpose(ret, [1, 2, 3, 0])
+	# print ret.get_shape().as_list()
+	return ret
+###############################################################################
+def aff_to_seg_op(aff, nhood=tf.constant(malis.mknhood3d(1)), threshold=tf.constant(np.array([0.5])), name='AffToSeg'):
+	# Define the numpy function to transform affinity to segmentation
+	def np_func (aff, nhood, threshold):
+		aff = np.transpose(aff, [3, 0, 1, 2]) # zyx3 to 3zyx
+		ret = malis.connected_components_affgraph((aff > threshold[0]).astype(np.int32), nhood)[0].astype(np.int32) 
+		ret = skimage.measure.label(ret).astype(np.int32)
+		return ret
+	# print aff.get_shape().as_list()
+	# Convert numpy function to tensorflow function
+	tf_func = tf.py_func(np_func, [aff, nhood, threshold], [tf.int32], name=name)
+	ret = tf.reshape(tf_func[0], [aff.shape[0], aff.shape[1], aff.shape[2]])
+	ret = tf.expand_dims(ret, axis=-1)
+	# print ret.get_shape().as_list()
+	return ret
+###############################################################################
 def toMaxLabels(label, factor=320):
 	result = tf.cast(label, tf.float32)
 	status = tf.equal(result, -1.0*tf.ones_like(result))

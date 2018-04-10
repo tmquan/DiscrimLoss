@@ -149,8 +149,8 @@ class Model(ModelDesc):
 
 	def inputs(self):
 		return [
-			tf.placeholder(tf.float32, (None, DIMY, DIMX, 1), 'image'),
-			tf.placeholder(tf.float32, (None, DIMY, DIMX, 1), 'label'),
+			tf.placeholder(tf.float32, (1, DIMY, DIMX, 1), 'image'),
+			tf.placeholder(tf.float32, (1, DIMY, DIMX, 1), 'label'),
 			]
 
 	def build_graph(self, image, label):
@@ -178,10 +178,15 @@ class Model(ModelDesc):
 		self.cost = tf.reduce_sum(losses, name='self.cost')
 		add_moving_summary(self.cost)
 		# Visualization
+		pa  = seg_to_aff_op(tf_2imag(pl), name='pa')
+		pia = seg_to_aff_op(tf_2imag(pil), name='pia')
 		# Segmentation
 		pz = tf.zeros_like(pi)
 		# viz = tf.concat([image, label, pic], axis=2)
-		viz = tf.concat([pi, pl, pil], axis=2)
+		viz = tf.concat([tf.concat([pi, pl, pil], axis=2),
+						 tf.concat([pa [...,0:1], pa [...,1:2], pa [...,2:3]], axis=2),
+						 tf.concat([pia[...,0:1], pia[...,1:2], pia[...,2:3]], axis=2),
+						 ], axis=1)
 		viz = tf_2imag(viz)
 
 		viz = tf.cast(tf.clip_by_value(viz, 0, 255), tf.uint8, name='viz')
