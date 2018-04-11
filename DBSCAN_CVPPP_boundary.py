@@ -161,14 +161,15 @@ class Model(ModelDesc):
 
 
 		with tf.variable_scope('gen'):
-			# with tf.device('/device:GPU:0'):
+			with tf.device('/device:GPU:0'):
 				with tf.variable_scope('feats'):
 					pid, _  = self.generator(pi, last_dim=16)
 			# with tf.device('/device:GPU:1'):
+			with tf.device('/cpu:0'):
 				with tf.variable_scope('label'):
-					# with varreplace.freeze_variables():
-					pil = tf_cluster_dbscan(pid, feature_dim=16, label_shape=[1, DIMY, DIMX, 1])
-					pil = tf_2tanh(pil)
+					with varreplace.freeze_variables():
+						pil = tf_cluster_dbscan(pid, feature_dim=16, label_shape=[1, DIMY, DIMX, 1])
+						pil = tf_2tanh(pil)
 
 
 		losses = []
@@ -325,7 +326,7 @@ if __name__ == '__main__':
 		pass
 	else:
 		# Set up configuration
-		# Set the logger directory
+		# Set the logger directorywith tf.device('/cpu:0'):
 		logger.auto_set_dir()
 
 		# session_init = SaverRestore(args.load) if args.load else None, 
