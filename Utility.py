@@ -371,3 +371,34 @@ def discriminative_loss(prediction, correct_label, feature_dim, image_shape,
 	l_reg = tf.reduce_mean(out_reg_op)
 
 	return disc_loss, l_var, l_dist, l_reg
+
+
+## Implement clustering algorithm here
+from sklearn import cluster
+
+
+
+def tf_cluster_dbscan(X, feature_dim, label_shape=None, eps=0.3, name='DBSCAN'):
+	# Define the numpy function to perform such a clustering the high dimensional feature
+	def np_func(X, feature_dim, label_shape=None, eps=0.3):
+		# Perform clustering on high dimensional channel image
+		feats_shape = X.shape
+		# if label_shape==None:
+		# 	label_shape = feats_shape[:-1]
+		# 	label_shape = np.expand_dims(label_shape, -1)
+		# Flatten the 
+		X_flatten = np.reshape(X, [-1, feature_dim])
+		algorithm = cluster.DBSCAN(eps=eps)
+		algorithm.fit(X_flatten)
+		# Get the result in float32
+		y_pred_flatten = algorithm.labels_.astype(np.float32)
+		y_pred = np.reshape(y_pred_flatten, label_shape)
+		return y_pred
+
+	# print aff.get_shape().as_list()
+	# Convert numpy function to tensorflow function
+	tf_func = tf.py_func(np_func, [X, feature_dim, label_shape, eps], [tf.float32], name=name)
+	ret = tf.reshape(tf_func[0], label_shape)
+	print(X)
+	print(ret)
+	return ret
