@@ -179,6 +179,7 @@ class Model(ModelDesc):
 		with tf.name_scope('loss_spectral'):
 			spectral_loss  = supervised_clustering_loss(tf.concat([tf_2imag(pid)/255.0, pil/255.0, pila], axis=-1), 
 																	 tf_2imag(pl), 
+																	 20,
 																	 (DIMY, DIMX), 
 																	)
 
