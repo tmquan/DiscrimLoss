@@ -231,7 +231,7 @@ def supervised_clustering_loss(prediction, correct_label, feature_dim, label_sha
 
 
 def tf_norm(inputs, axis=1, epsilon=1e-7,  name='safe_norm'):
-	squared_norm    = tf.reduce_sum(tf.square(inputs), axis=axis, keep_dims=True)
+	squared_norm    = tf.reduce_sum(tf.square(inputs), axis=axis, keepdims=True)
 	safe_norm       = tf.sqrt(squared_norm+epsilon)
 	return tf.identity(safe_norm, name=name)
 

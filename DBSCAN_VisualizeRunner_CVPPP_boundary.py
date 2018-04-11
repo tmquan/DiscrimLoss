@@ -235,7 +235,7 @@ class Model(ModelDesc):
 		# Segmentation
 		pz = tf.zeros_like(pi)
 		# viz = tf.concat([image, label, pic], axis=2)
-		viz = tf.concat([tf.concat([pi, pl, pil], axis=2),
+		viz = tf.concat([tf.concat([pi, pl, pid[...,0:1], pid[...,1:2], pid[...,2:3], pid[...,3:4]], axis=2),
 						 ], axis=1)
 		viz = tf_2imag(viz)
 
@@ -249,16 +249,22 @@ class Model(ModelDesc):
 
 ###############################################################################
 class VisualizeRunner(Callback):
+	def __init__(self, input, tower_name='InferenceTower', device=0):
+		self.dset = input 
+		self._tower_name = tower_name
+		self._device = device
+
 	def _setup_graph(self):
 		self.pred = self.trainer.get_predictor(
 			['image', 'label'], ['viz', 'pid'])
 
 	def _before_train(self):
-		global args
-		self.test_ds = get_data(args.data, isTrain=False, isValid=False, isTest=True)
+		# global args
+		# self.test_ds = get_data(args.data, isTrain=False, isValid=False, isTest=True)
+		pass
 
 	def _trigger(self):
-		for lst in self.test_ds.get_data():
+		for lst in self.dset.get_data():
 			viz_test, pid_test = self.pred(lst)
 			viz_test = np.squeeze(np.array(viz_test))
 			# pid_test = np.squeeze(np.array(pid_test))
@@ -351,8 +357,9 @@ if __name__ == '__main__':
 			dataflow        =   train_ds,
 			callbacks       =   [
 				PeriodicTrigger(ModelSaver(), every_k_epochs=50),
-				PeriodicTrigger(VisualizeRunner(), every_k_epochs=5),
-				PeriodicTrigger(InferenceRunner(valid_ds, [ScalarStats('loss_mae/mae_il')]), every_k_epochs=1),
+				PeriodicTrigger(VisualizeRunner(train_ds), every_k_epochs=5),
+				PeriodicTrigger(VisualizeRunner(valid_ds), every_k_epochs=5),
+				# PeriodicTrigger(InferenceRunner(valid_ds, [ScalarStats('loss_mae/mae_il')]), every_k_epochs=1),
 				# ScheduledHyperParamSetter('learning_rate', [(0, 1e-6), (300, 1e-6)], interp='linear')
 				ScheduledHyperParamSetter('learning_rate', [(0, 2e-4), (100, 1e-4), (200, 1e-5), (300, 1e-6)], interp='linear')
 				# ScheduledHyperParamSetter('learning_rate', [(30, 6e-6), (45, 1e-6), (60, 8e-7)]),
