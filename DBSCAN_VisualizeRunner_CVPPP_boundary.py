@@ -186,7 +186,7 @@ class Model(ModelDesc):
 																	 (DIMY, DIMX), 
 																	)
 
-			losses.append(1e0*spectral_loss)
+			losses.append(1e4*spectral_loss)
 			add_moving_summary(spectral_loss)
 
 		with tf.name_scope('loss_discrim'):
