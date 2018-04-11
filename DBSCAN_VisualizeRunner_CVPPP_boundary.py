@@ -166,23 +166,23 @@ class Model(ModelDesc):
 					pid, _  = self.generator(pi, last_dim=16)
 			# with tf.device('/device:GPU:1'):
 			# with tf.device('/cpu:0'):
-				with tf.variable_scope('label'):
-					with varreplace.freeze_variables():
-						pil = tf_cluster_dbscan(pid, feature_dim=16, label_shape=[1, DIMY, DIMX, 1])
-						pil = tf_2tanh(pil)
+				# with tf.variable_scope('label'):
+				# 	with varreplace.freeze_variables():
+				# 		pil = tf_cluster_dbscan(pid, feature_dim=16, label_shape=[1, DIMY, DIMX, 1])
+				# 		pil = tf_2tanh(pil)
 
 
 		losses = []
 
 		
 
-		pa   = seg_to_aff_op(tf_2imag(pl)+1.0,  name='pa')		# 0 1
-		pila = seg_to_aff_op(tf_2imag(pil)+1.0, name='pila')		# 0 1
+		# pa   = seg_to_aff_op(tf_2imag(pl)+1.0,  name='pa')		# 0 1
+		# pila = seg_to_aff_op(tf_2imag(pil)+1.0, name='pila')		# 0 1
 
 		with tf.name_scope('loss_spectral'):
-			spectral_loss  = supervised_clustering_loss(tf.concat([tf_2imag(pid)/255.0, pil/255.0, pila], axis=-1), 
+			spectral_loss  = supervised_clustering_loss(pid, 
 																	 tf_2imag(pl), 
-																	 20,
+																	 16,
 																	 (DIMY, DIMX), 
 																	)
 
@@ -197,36 +197,36 @@ class Model(ModelDesc):
 			delta_d 	= 1.5 #args.ddist
 
 			#discrim_loss  =  ### Optimization operations
-			discrim_loss, l_var, l_dist, l_reg = discriminative_loss(tf.concat([tf_2imag(pid)/255.0, pil/255.0, pila], axis=-1), 
+			discrim_loss, l_var, l_dist, l_reg = discriminative_loss(pid,
 																	 tf_2imag(pl), 
-																	 20, 
+																	 16, 
 																	 (DIMY, DIMX), 
 																     delta_v, delta_d, param_var, param_dist, param_reg)
 
 			losses.append(1e-3*discrim_loss)
 			add_moving_summary(discrim_loss)
 
-		with tf.name_scope('loss_aff'):		
-			aff_ila = tf.identity(tf.subtract(binary_cross_entropy(pa, pila), 
-					    		 			  dice_coe(pa, pila, axis=[0,1,2,3], loss_type='jaccard')),
-								 name='aff_ila')			
-			#losses.append(3e-3*aff_ila)
-			add_moving_summary(aff_ila)
+		# with tf.name_scope('loss_aff'):		
+		# 	aff_ila = tf.identity(tf.subtract(binary_cross_entropy(pa, pila), 
+		# 			    		 			  dice_coe(pa, pila, axis=[0,1,2,3], loss_type='jaccard')),
+		# 						 name='aff_ila')			
+		# 	#losses.append(3e-3*aff_ila)
+		# 	add_moving_summary(aff_ila)
 
-		with tf.name_scope('loss_smooth'):		
-			smooth_ila = tf.reduce_mean((tf.ones_like(pila) - pila), name='smooth_ila')			
-			losses.append(1e1*smooth_ila)
-			add_moving_summary(smooth_ila)
+		# with tf.name_scope('loss_smooth'):		
+		# 	smooth_ila = tf.reduce_mean((tf.ones_like(pila) - pila), name='smooth_ila')			
+		# 	losses.append(1e1*smooth_ila)
+		# 	add_moving_summary(smooth_ila)
 
-		with tf.name_scope('loss_mae'):
-			mae_il  = tf.reduce_mean(tf.abs(pl - pil), name='mae_il')
-			losses.append(1e0*mae_il)
-			add_moving_summary(mae_il)
+		# with tf.name_scope('loss_mae'):
+		# 	mae_il  = tf.reduce_mean(tf.abs(pl - pil), name='mae_il')
+		# 	losses.append(1e0*mae_il)
+		# 	add_moving_summary(mae_il)
 			
-			mae_ila = tf.reduce_mean(tf.abs(pa - pila), name='mae_ila')
-			losses.append(1e0*mae_ila)
-			add_moving_summary(mae_ila)
-			
+		# 	mae_ila = tf.reduce_mean(tf.abs(pa - pila), name='mae_ila')
+		# 	losses.append(1e0*mae_ila)
+		# 	add_moving_summary(mae_ila)
+		pid = 	tf.identity(pid, name='pid')
 
 		self.cost = tf.reduce_sum(losses, name='self.cost')
 		add_moving_summary(self.cost)
@@ -236,8 +236,6 @@ class Model(ModelDesc):
 		pz = tf.zeros_like(pi)
 		# viz = tf.concat([image, label, pic], axis=2)
 		viz = tf.concat([tf.concat([pi, pl, pil], axis=2),
-						 tf.concat([pa[...,0:1], pa[...,1:2], pa[...,2:3]], axis=2),
-						 tf.concat([pila[...,0:1], pila[...,1:2], pila[...,2:3]], axis=2),
 						 ], axis=1)
 		viz = tf_2imag(viz)
 
@@ -253,7 +251,7 @@ class Model(ModelDesc):
 class VisualizeRunner(Callback):
 	def _setup_graph(self):
 		self.pred = self.trainer.get_predictor(
-			['image', 'label'], ['viz'])
+			['image', 'label'], ['viz', 'pid'])
 
 	def _before_train(self):
 		global args
@@ -261,12 +259,28 @@ class VisualizeRunner(Callback):
 
 	def _trigger(self):
 		for lst in self.test_ds.get_data():
-			viz_test = self.pred(lst)
+			viz_test, pid_test = self.pred(lst)
 			viz_test = np.squeeze(np.array(viz_test))
-
+			# pid_test = np.squeeze(np.array(pid_test))
+			def np_func(X, feature_dim, label_shape=None, eps=0.3):
+				# Perform clustering on high dimensional channel image
+				feats_shape = X.shape
+				# if label_shape==None:
+				# 	label_shape = feats_shape[:-1]
+				# 	label_shape = np.expand_dims(label_shape, -1)
+				# Flatten the 
+				X_flatten = np.reshape(X, [-1, feature_dim])
+				algorithm = cluster.DBSCAN(eps=eps)
+				algorithm.fit(X_flatten)
+				# Get the result in float32
+				y_pred_flatten = algorithm.labels_.astype(np.float32)
+				y_pred = np.reshape(y_pred_flatten, label_shape)
+				return y_pred
+			pil_test = np_func(pid_test, 16, [1, DIMY, DIMX, 1])
+			pil_test = np.squeeze(pil_test)
 			#print viz_test.shape
 
-			self.trainer.monitors.put_image('viz_test', viz_test)
+			self.trainer.monitors.put_image('viz_test', [viz_test, pil_test])
 ###############################################################################
 def get_data(dataDir, isTrain=False, isValid=False, isTest=False):
 	# Process the directories 
