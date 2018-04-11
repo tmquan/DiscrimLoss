@@ -118,7 +118,7 @@ class CVPPPImageDataFlow(RNGDataFlow):
 			else:
 				label = label_p.copy()
 
-			label = skimage.measure.label(label)*10
+			label = skimage.measure.label(label)
 			# label = skimage.measure.label(label)
 			image = 255.0*(1-skimage.segmentation.find_boundaries(label, mode='thick'))
 			
@@ -161,10 +161,20 @@ class Model(ModelDesc):
 
 
 		with tf.variable_scope('gen'):
-			with tf.device('/device:GPU:0'):
-				with tf.variable_scope('lbl'):
-					pil, _  = self.generator(pi, last_dim=1)
+			# with tf.device('/device:GPU:0'):
+				with tf.variable_scope('feats'):
+					pid, _  = self.generator(pi, last_dim=16)
+			# with tf.device('/device:GPU:1'):
+				with tf.variable_scope('label'):
+					pil, _  = self.generator(pid, last_dim=1)
 
+					shape = pil.get_shape()
+					pic = tf.squeeze(tf_2imag(pil))
+					pic = tf.contrib.image.connected_components(pic)
+					pic = tf.reshape(pic, shape)
+					pic = tf.cast(pic, dtype=tf.float32)
+					pic = tf_2tanh(pic)
+					print(pic)
 
 		losses = []
 
@@ -172,6 +182,34 @@ class Model(ModelDesc):
 
 		pa   = seg_to_aff_op(tf_2imag(pl)+1.0,  name='pa')		# 0 1
 		pila = seg_to_aff_op(tf_2imag(pil)+1.0, name='pila')		# 0 1
+		pica = seg_to_aff_op(tf_2imag(pic)+1.0, name='pica')		# 0 1
+
+		with tf.name_scope('loss_spectral'):
+			spectral_loss  = supervised_clustering_loss(tf.concat([tf_2imag(pid)/255.0, pil/255.0, pila], axis=-1), 
+																	 tf_2imag(pl), 
+																	 20,
+																	 (DIMY, DIMX), 
+																	)
+
+			losses.append(1e1*spectral_loss)
+			add_moving_summary(spectral_loss)
+
+		with tf.name_scope('loss_discrim'):
+			param_var 	= 1.0 #args.var
+			param_dist 	= 1.0 #args.dist
+			param_reg 	= 0.001 #args.reg
+			delta_v 	= 0.5 #args.dvar
+			delta_d 	= 1.5 #args.ddist
+
+			#discrim_loss  =  ### Optimization operations
+			discrim_loss, l_var, l_dist, l_reg = discriminative_loss(tf.concat([tf_2imag(pid)/255.0, pil/255.0, pila], axis=-1), 
+																	 tf_2imag(pl), 
+																	 20, 
+																	 (DIMY, DIMX), 
+																     delta_v, delta_d, param_var, param_dist, param_reg)
+
+			losses.append(1e-3*discrim_loss)
+			add_moving_summary(discrim_loss)
 
 		with tf.name_scope('loss_aff'):		
 			aff_ila = tf.identity(tf.subtract(binary_cross_entropy(pa, pila), 
@@ -180,31 +218,50 @@ class Model(ModelDesc):
 			#losses.append(3e-3*aff_ila)
 			add_moving_summary(aff_ila)
 
+			aff_ica = tf.identity(tf.subtract(binary_cross_entropy(pa, pica), 
+					    		 			  dice_coe(pa, pica, axis=[0,1,2,3], loss_type='jaccard')),
+								 name='aff_ica')			
+			#losses.append(3e-3*aff_ila)
+			add_moving_summary(aff_ica)
+
 		with tf.name_scope('loss_smooth'):		
 			smooth_ila = tf.reduce_mean((tf.ones_like(pila) - pila), name='smooth_ila')			
-			# losses.append(smooth_ila)
+			losses.append(1e1*smooth_ila)
 			add_moving_summary(smooth_ila)
+
+			smooth_ica = tf.reduce_mean((tf.ones_like(pica) - pica), name='smooth_ica')			
+			losses.append(1e1*smooth_ica)
+			add_moving_summary(smooth_ica)
 
 		with tf.name_scope('loss_mae'):
 			mae_il  = tf.reduce_mean(tf.abs(pl - pil), name='mae_il')
 			losses.append(1e0*mae_il)
 			add_moving_summary(mae_il)
 			
+			mae_ic  = tf.reduce_mean(tf.abs(pl - pic), name='mae_ic')
+			losses.append(1e0*mae_ic)
+			add_moving_summary(mae_ic)
+
+			mae_rlc  = tf.reduce_mean(tf.abs(pil - pic), name='mae_rlc')
+			losses.append(1e0*mae_rlc)
+			add_moving_summary(mae_rlc)
+
 			mae_ila = tf.reduce_mean(tf.abs(pa - pila), name='mae_ila')
-			#losses.append(1e0*mae_ila)
+			losses.append(1e0*mae_ila)
 			add_moving_summary(mae_ila)
 			
 
 		self.cost = tf.reduce_sum(losses, name='self.cost')
 		add_moving_summary(self.cost)
-		# Visualization
+		# Visualizationf*5
 
 		# Segmentation
 		pz = tf.zeros_like(pi)
 		# viz = tf.concat([image, label, pic], axis=2)
-		viz = tf.concat([tf.concat([pi, pl, pil], axis=2),
-						 tf.concat([pa[...,0:1], pa[...,1:2], pa[...,2:3]], axis=2),
-						 tf.concat([pila[...,0:1], pila[...,1:2], pila[...,2:3]], axis=2),
+		viz = tf.concat([tf.concat([pi, pl, pil, pic], axis=2),
+						 tf.concat([pz, pa[...,0:1], pa[...,1:2], pa[...,2:3]], axis=2),
+						 tf.concat([pz, pila[...,0:1], pila[...,1:2], pila[...,2:3]], axis=2),
+						 tf.concat([pz, pica[...,0:1], pica[...,1:2], pica[...,2:3]], axis=2),
 						 ], axis=1)
 		viz = tf_2imag(viz)
 
