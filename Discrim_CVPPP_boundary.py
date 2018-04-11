@@ -186,7 +186,7 @@ class Model(ModelDesc):
 			#discrim_loss  =  ### Optimization operations
 			discrim_loss, l_var, l_dist, l_reg = discriminative_loss(tf.concat([pid, pil, pila], axis=-1), 
 																	 tf_2imag(pl), 
-																	 16, 
+																	 20, 
 																	 (DIMY, DIMX), 
 																     delta_v, delta_d, param_var, param_dist, param_reg)
 
