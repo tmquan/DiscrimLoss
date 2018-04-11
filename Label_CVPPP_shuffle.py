@@ -187,7 +187,9 @@ class Model(ModelDesc):
 			add_moving_summary(aff_ila)
 
 		with tf.name_scope('loss_smooth'):		
-			smooth_ila = tf.reduce_mean((tf.ones_like(pila) - pila), name='smooth_ila')			
+			cond = tf.cast(pila==0.0, tf.bool)
+			pilc = tf.where(cond, tf.ones_like(pila), pila, name='pilc')
+			smooth_ila = tf.reduce_mean((tf.ones_like(pila) - pilc), name='smooth_ila')			
 			losses.append(1e1*smooth_ila)
 			add_moving_summary(smooth_ila)
 
@@ -197,7 +199,7 @@ class Model(ModelDesc):
 			add_moving_summary(mae_il)
 			
 			mae_ila = tf.reduce_mean(tf.abs(pa - pila), name='mae_ila')
-			#losses.append(1e0*mae_ila)
+			losses.append(1e0*mae_ila)
 			add_moving_summary(mae_ila)
 			
 

@@ -161,10 +161,10 @@ class Model(ModelDesc):
 
 
 		with tf.variable_scope('gen'):
-			with tf.device('/device:GPU:0'):
+			# with tf.device('/device:GPU:0'):
 				with tf.variable_scope('feats'):
-					pid, _  = self.generator(pi, last_dim=32)
-			with tf.device('/device:GPU:1'):
+					pid, _  = self.generator(pi, last_dim=16)
+			# with tf.device('/device:GPU:1'):
 				with tf.variable_scope('label'):
 					pil, _  = self.generator(pid, last_dim=1)
 
@@ -184,7 +184,7 @@ class Model(ModelDesc):
 			delta_d 	= 1.5 #args.ddist
 
 			#discrim_loss  =  ### Optimization operations
-			discrim_loss, l_var, l_dist, l_reg = discriminative_loss(pid, label, 32, (DIMY, DIMX), 
+			discrim_loss, l_var, l_dist, l_reg = discriminative_loss(pid, tf_2imag(pl)+1.0, 16, (DIMY, DIMX), 
 																     delta_v, delta_d, param_var, param_dist, param_reg)
 
 			losses.append(1e1*discrim_loss)
